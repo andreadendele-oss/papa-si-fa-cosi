@@ -14,10 +14,11 @@ import {
   Check, 
   RefreshCw,
   Palette,
-  ShieldCheck
+  ShieldCheck,
+  Dices
 } from 'lucide-react';
 
-// PALETTE COMPLETA GUARDAROBA MASCHILE CON CODICI HEX
+// PALETTE COLORI GUARDAROBA
 const PALETTE_COLORI = [
   { id: 'bianco', nome: 'Bianco Ottico', hex: '#FFFFFF', bordo: true },
   { id: 'panna', nome: 'Bianco Panna / Avorio', hex: '#FAF3E0', bordo: true },
@@ -42,7 +43,17 @@ const PALETTE_COLORI = [
   { id: 'rosa_chiaro', nome: 'Rosa Pastello', hex: '#F9A8D4' }
 ];
 
-// REGOLE DI ABBINAMENTO PER OGNI COLORE PRINCIPALE
+// OUTFIT PERFETTI PER LA ROULETTE
+const OUTFIT_ROULETTE = [
+  { sopra: 'Blu Scuro / Navy', sotto: 'Beige Sabbia', scarpe: 'Marrone Cuoio', giacca: 'Giacca Blu scuro' },
+  { sopra: 'Bianco Ottico', sotto: 'Jeans Denim Chiaro', scarpe: 'Bianco Ottico', giacca: 'Giubbotto Marrone' },
+  { sopra: 'Celeste Camicia', sotto: 'Grigio Antracite', scarpe: 'Testa di Moro', giacca: 'Cappotto Scuro' },
+  { sopra: 'Bianco Panna / Avorio', sotto: 'Verde Oliva / Cargo', scarpe: 'Marrone Cuoio', giacca: 'Cardigan Beige' },
+  { sopra: 'Bordeaux / Vinaccia', sotto: 'Beige Sabbia', scarpe: 'Marrone Cuoio', giacca: 'Blazer Blu' },
+  { sopra: 'Grigio Perla', sotto: 'Blu Scuro / Navy', scarpe: 'Marrone Cuoio', giacca: 'Giacca Grigia' }
+];
+
+// REGOLE DI ABBINAMENTO
 const REGOLE_ABBINAMENTO = {
   'Beige Sabbia': {
     sopra: ['Blu Scuro / Navy', 'Bianco Ottico', 'Celeste Camicia', 'Verde Salvia Chiaro', 'Bordeaux / Vinaccia'],
@@ -102,7 +113,7 @@ const REGOLE_ABBINAMENTO = {
   }
 };
 
-// COMPONENTE: BADGE COLORE RAFFIGURATO VISIVAMENTE
+// COMPONENTE: BOLLINO COLORE VISIVO
 function BollinoColore({ nome, misura = 'normale', mostraNome = true }) {
   const c = PALETTE_COLORI.find(item => item.nome === nome) || { hex: '#9CA3AF', bordo: false };
   const dim = misura === 'piccolo' ? 'w-3.5 h-3.5' : misura === 'grande' ? 'w-6 h-6' : 'w-4 h-4';
@@ -118,7 +129,7 @@ function BollinoColore({ nome, misura = 'normale', mostraNome = true }) {
   );
 }
 
-// COMPONENTE: BOTTONE SARTORIALE PULITO (SENZA CROCE!)
+// COMPONENTE: BOTTONE SARTORIALE
 function BottoneSartoriale({ onClick, attivo = false, children, variante = 'corno', className = '' }) {
   const stili = {
     corno: attivo 
@@ -126,7 +137,8 @@ function BottoneSartoriale({ onClick, attivo = false, children, variante = 'corn
       : 'bg-[#53382C] text-[#F5EBE1] border-[#3E2723] hover:bg-[#432A20] shadow-sm',
     avorio: attivo 
       ? 'bg-[#F2ECE4] text-[#2B1B17] border-[#BCAAA4] ring-2 ring-[#8D6E63] shadow-md' 
-      : 'bg-white text-[#4E342E] border-[#E6DCD1] hover:bg-[#F9F6F0] shadow-sm'
+      : 'bg-white text-[#4E342E] border-[#E6DCD1] hover:bg-[#F9F6F0] shadow-sm',
+    viola: 'bg-[#6B21A8] text-white border-[#581C87] hover:bg-[#7E22CE] shadow-md'
   };
 
   return (
@@ -141,7 +153,7 @@ function BottoneSartoriale({ onClick, attivo = false, children, variante = 'corn
 }
 
 export default function Home() {
-  const [tab, setTab] = useState('consigli'); // 'consigli', 'scanner', 'semaforo', 'salvati'
+  const [tab, setTab] = useState('consigli');
   const [coloreScelto, setColoreScelto] = useState('Beige Sabbia');
 
   // Scanner Fotocamera
@@ -150,21 +162,32 @@ export default function Home() {
   const [fotoCaricata, setFotoCaricata] = useState(null);
   const [inAnalisi, setInAnalisi] = useState(false);
 
-  // Semaforo
+  // Semaforo & Roulette
   const [semSopra, setSemSopra] = useState('Blu Scuro / Navy');
-  const [semSotto, setSemSotto] = useState('Nero Notte');
+  const [semSotto, setSemSotto] = useState('Beige Sabbia');
   const [semScarpe, setSemScarpe] = useState('Marrone Cuoio');
+  const [daRoulette, setDaRoulette] = useState(false);
+  const [inGiroRoulette, setInGiroRoulette] = useState(false);
 
   // Supabase
   const [completi, setCompleti] = useState([]);
   const [salvato, setSalvato] = useState(false);
+  const [inSalvataggio, setInSalvataggio] = useState(false);
 
   async function caricaCompleti() {
     try {
-      const { data } = await supabase.from('papa_outfits').select('*').order('created_at', { ascending: false });
-      if (data) setCompleti(data);
+      const { data, error } = await supabase
+        .from('papa_outfits')
+        .select('*')
+        .order('created_at', { ascending: false });
+
+      if (error) {
+        console.error('Errore lettura completi:', error);
+      } else if (data) {
+        setCompleti(data);
+      }
     } catch (e) {
-      console.log(e);
+      console.error('Catch caricaCompleti:', e);
     }
   }
 
@@ -172,23 +195,45 @@ export default function Home() {
     caricaCompleti();
   }, []);
 
+  // SALVATAGGIO ROBUSTO CON GESTIONE ERRORI
   async function salvaCompleto(top, bot, shoes, note) {
-    const { error } = await supabase.from('papa_outfits').insert([
-      { title: `Completo ${bot}`, top_piece: top, bottom_piece: bot, shoes_piece: shoes, notes: note }
-    ]);
-    if (!error) {
-      setSalvato(true);
-      setTimeout(() => setSalvato(false), 2200);
-      caricaCompleti();
+    try {
+      setInSalvataggio(true);
+      const nuovoOutfit = {
+        title: `Completo ${bot}`,
+        top_piece: top,
+        bottom_piece: bot,
+        shoes_piece: shoes,
+        notes: note || 'Consigliato'
+      };
+
+      const { data, error } = await supabase
+        .from('papa_outfits')
+        .insert([nuovoOutfit])
+        .select();
+
+      if (error) {
+        console.error('Errore salvataggio:', error);
+        alert(`Errore Supabase: ${error.message} (Codice: ${error.code})`);
+      } else {
+        setSalvato(true);
+        setTimeout(() => setSalvato(false), 2500);
+        await caricaCompleti();
+      }
+    } catch (err) {
+      console.error('Catch salvataggio:', err);
+      alert(`Errore di connessione: ${err.message}`);
+    } finally {
+      setInSalvataggio(false);
     }
   }
 
   async function eliminaCompleto(id) {
-    await supabase.from('papa_outfits').delete().eq('id', id);
-    caricaCompleti();
+    const { error } = await supabase.from('papa_outfits').delete().eq('id', id);
+    if (!error) caricaCompleti();
   }
 
-  // ALGORITMO DI RICONOSCIMENTO COLORE DA FOTOCAMERA / IMMAGINE
+  // FOTOCAMERA SCANNER
   function analizzaFoto(e) {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -206,7 +251,6 @@ export default function Home() {
       canvas.height = 100;
       ctx.drawImage(img, 0, 0, 100, 100);
 
-      // Preleva il colore centrale del capo
       const pixel = ctx.getImageData(45, 45, 10, 10).data;
       let r = 0, g = 0, b = 0, count = 0;
       for (let i = 0; i < pixel.length; i += 4) {
@@ -219,7 +263,6 @@ export default function Home() {
       g = Math.round(g / count);
       b = Math.round(b / count);
 
-      // Trova il colore della palette più vicino
       let minDistance = Infinity;
       let match = PALETTE_COLORI[0];
 
@@ -238,6 +281,31 @@ export default function Home() {
       setColoreRilevato(match);
       setInAnalisi(false);
     };
+  }
+
+  // GIRA LA ROULETTE DI PAPÀ
+  function giraRoulette() {
+    setInGiroRoulette(true);
+    setDaRoulette(false);
+
+    let count = 0;
+    const intervallo = setInterval(() => {
+      const randomLook = OUTFIT_ROULETTE[Math.floor(Math.random() * OUTFIT_ROULETTE.length)];
+      setSemSopra(randomLook.sopra);
+      setSemSotto(randomLook.sotto);
+      setSemScarpe(randomLook.scarpe);
+      count++;
+
+      if (count > 8) {
+        clearInterval(intervallo);
+        const scelto = OUTFIT_ROULETTE[Math.floor(Math.random() * OUTFIT_ROULETTE.length)];
+        setSemSopra(scelto.sopra);
+        setSemSotto(scelto.sotto);
+        setSemScarpe(scelto.scarpe);
+        setDaRoulette(true);
+        setInGiroRoulette(false);
+      }
+    }, 100);
   }
 
   // Valutazione Semaforo
@@ -280,7 +348,7 @@ export default function Home() {
   return (
     <div className="min-h-screen bg-[#FAF8F5] text-[#2B1B17] font-sans pb-16">
       
-      {/* HEADER ELEGANTE */}
+      {/* HEADER */}
       <header className="bg-white border-b border-[#E8DFC8] p-4 sm:p-5 sticky top-0 z-20 shadow-sm">
         <div className="max-w-2xl mx-auto flex items-center justify-between">
           <div className="flex items-center gap-3">
@@ -297,7 +365,7 @@ export default function Home() {
         </div>
       </header>
 
-      {/* NAVIGAZIONE CON BOTTONI PULITI */}
+      {/* NAVIGAZIONE */}
       <nav className="max-w-2xl mx-auto w-full px-4 pt-4">
         <div className="grid grid-cols-4 gap-1.5 bg-[#EFE6DC] p-1.5 rounded-full border border-[#DFD5C6]">
           <BottoneSartoriale onClick={() => setTab('consigli')} attivo={tab === 'consigli'} variante="corno">
@@ -317,7 +385,7 @@ export default function Home() {
 
           <BottoneSartoriale onClick={() => setTab('salvati')} attivo={tab === 'salvati'} variante="corno">
             <Bookmark className="w-3.5 h-3.5" />
-            <span>Salvati</span>
+            <span>Salvati ({completi.length})</span>
           </BottoneSartoriale>
         </div>
       </nav>
@@ -325,19 +393,16 @@ export default function Home() {
       <main className="max-w-2xl mx-auto w-full px-4 pt-5">
         
         {/* ========================================================= */}
-        {/* TAB 1: TUTTI I COLORI RAFFIGURATI (PALETTE COMPLETA)      */}
+        {/* TAB 1: PALETTE E VARIANTI                                 */}
         {/* ========================================================= */}
         {tab === 'consigli' && (
           <div className="space-y-6">
-
-            {/* SELEZIONE VISIVA DEL COLORE DEI PANTALONI */}
             <div className="bg-white p-5 rounded-3xl border border-[#E8DFC8] shadow-sm">
               <label className="text-xs font-bold uppercase tracking-wider text-[#7A695C] block mb-3">
-                1. Scegli il colore del tuo pantalone (Guarda il colore effettivo):
+                1. Scegli il colore del tuo pantalone:
               </label>
 
-              {/* GRIGLIA CON TUTTI I COLORI RAFFIGURATI */}
-              <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5 max-h-72 overflow-y-auto p-1 pr-2">
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5 max-h-64 overflow-y-auto p-1 pr-2">
                 {PALETTE_COLORI.map((c) => {
                   const attivo = coloreScelto === c.nome;
                   return (
@@ -363,7 +428,7 @@ export default function Home() {
               </div>
             </div>
 
-            {/* REGOLA D'ORO */}
+            {/* CONSIGLIO */}
             <div className="bg-[#FAF4EB] border-2 border-dashed border-[#D2B48C] p-4 rounded-3xl flex items-center gap-3">
               <Sparkles className="w-6 h-6 text-[#B45309] shrink-0" />
               <p className="text-xs sm:text-sm text-[#4E342E] font-medium leading-relaxed italic">
@@ -371,17 +436,16 @@ export default function Home() {
               </p>
             </div>
 
-            {/* COLORI DA ABBINARE (TUTTI RAFFIGURATI) */}
-            <div className="bg-white p-5 rounded-3xl border border-[#E8DFC8] shadow-sm space-y-5">
+            {/* ABBINAMENTI VISIVI */}
+            <div className="bg-white p-5 rounded-3xl border border-[#E8DFC8] shadow-sm space-y-4">
               <h3 className="font-serif font-extrabold text-base text-[#2B1B17] flex items-center gap-2">
                 <span>Abbinamenti per:</span>
                 <BollinoColore nome={coloreScelto} />
               </h3>
 
-              {/* Maglie / Camicie */}
               <div>
-                <p className="text-xs font-bold text-[#7A695C] uppercase tracking-wider mb-2.5">
-                  👕 Sopra consigliati (Camicie / Polo / Maglie):
+                <p className="text-xs font-bold text-[#7A695C] uppercase tracking-wider mb-2">
+                  👕 Sopra consigliati:
                 </p>
                 <div className="flex flex-wrap gap-2">
                   {info.sopra.map((nomeColore) => (
@@ -392,10 +456,9 @@ export default function Home() {
                 </div>
               </div>
 
-              {/* Scarpe */}
               <div>
-                <p className="text-xs font-bold text-[#7A695C] uppercase tracking-wider mb-2.5">
-                  👞 Scarpe e calzature consigliate:
+                <p className="text-xs font-bold text-[#7A695C] uppercase tracking-wider mb-2">
+                  👞 Scarpe consigliate:
                 </p>
                 <div className="flex flex-wrap gap-2">
                   {info.scarpe.map((nomeColore) => (
@@ -405,16 +468,12 @@ export default function Home() {
                   ))}
                 </div>
               </div>
-
-              <div className="p-3 bg-[#FAF8F5] rounded-2xl border border-[#E8DFC8] text-xs text-[#5D4037]">
-                <b>🧥 Giacca consigliata:</b> {info.giacca}
-              </div>
             </div>
 
-            {/* VARIANTI CON COLORI RAFFIGURATI */}
+            {/* VARIANTI CON TASTO SALVA FUNZIONANTE */}
             <div className="space-y-3">
               <h4 className="text-xs font-serif font-black uppercase tracking-wider text-[#7A695C]">
-                Look già pronti da indossare subito:
+                Look pronti da indossare:
               </h4>
 
               {[info.look1, info.look2].map((look, idx) => (
@@ -445,7 +504,7 @@ export default function Home() {
                     className="self-start sm:self-center shrink-0"
                   >
                     <Save className="w-3.5 h-3.5 text-[#78350F]" />
-                    <span>Salva Completo</span>
+                    <span>{inSalvataggio ? 'Salvataggio...' : 'Salva Completo'}</span>
                   </BottoneSartoriale>
                 </div>
               ))}
@@ -461,7 +520,7 @@ export default function Home() {
         )}
 
         {/* ========================================================= */}
-        {/* TAB 2: FOTOCAMERA E SCANNER AUTOMATICO                     */}
+        {/* TAB 2: FOTOCAMERA                                         */}
         {/* ========================================================= */}
         {tab === 'scanner' && (
           <div className="space-y-6">
@@ -472,10 +531,10 @@ export default function Home() {
 
               <div>
                 <h3 className="font-serif font-extrabold text-lg text-[#2B1B17]">
-                  Scannerizza il Tuo Capo con la Fotocamera! 📸
+                  Fotocamera Riconosci-Capo 📸
                 </h3>
                 <p className="text-xs text-[#7A695C] max-w-sm mx-auto mt-1">
-                  Scatta una foto al capo (maglia o pantalone) ben illuminato. L'app riconoscerà il colore e ti dirà cosa abbinarci!
+                  Scatta una foto a una maglia o a un pantalone ben illuminato!
                 </p>
               </div>
 
@@ -502,42 +561,28 @@ export default function Home() {
               {inAnalisi && (
                 <div className="flex items-center justify-center gap-2 text-xs font-bold text-[#78350F] pt-2">
                   <RefreshCw className="w-4 h-4 animate-spin" />
-                  <span>Analisi del tessuto in corso...</span>
+                  <span>Analisi in corso...</span>
                 </div>
               )}
             </div>
 
-            {/* RISULTATO RICONOSCIMENTO FOTO */}
             {coloreRilevato && (
-              <div className="bg-white p-6 rounded-3xl border border-[#795548] shadow-md space-y-4 animate-fadeIn">
+              <div className="bg-white p-6 rounded-3xl border border-[#795548] shadow-md space-y-4">
                 <div className="flex items-center gap-4">
                   {fotoCaricata && (
                     <img
                       src={fotoCaricata}
-                      alt="Capo scansionato"
+                      alt="Capo"
                       className="w-16 h-16 rounded-2xl object-cover border border-[#DFD5C6] shadow-sm"
                     />
                   )}
                   <div>
                     <span className="text-[11px] font-bold text-[#78350F] uppercase tracking-wider block">
-                      Colore Rilevato dalla Foto:
+                      Colore Rilevato:
                     </span>
                     <div className="mt-1">
                       <BollinoColore nome={coloreRilevato.nome} misura="grande" />
                     </div>
-                  </div>
-                </div>
-
-                <div className="p-4 bg-[#FAF4EB] rounded-2xl border border-[#E8DFC8]">
-                  <p className="text-xs font-bold text-[#78350F] uppercase mb-2">
-                    Cosa puoi abbinare subito a questo capo:
-                  </p>
-                  <div className="flex flex-wrap gap-2">
-                    {(REGOLE_ABBINAMENTO[coloreRilevato.nome]?.sopra || ['Bianco Ottico', 'Blu Scuro / Navy']).map((c) => (
-                      <div key={c} className="bg-white px-3 py-1.5 rounded-xl border border-[#DFD5C6] shadow-sm">
-                        <BollinoColore nome={c} />
-                      </div>
-                    ))}
                   </div>
                 </div>
 
@@ -549,7 +594,7 @@ export default function Home() {
                   variante="avorio"
                   className="w-full"
                 >
-                  <span>Guarda tutti i consigli completi per questo colore ➔</span>
+                  <span>Guarda gli abbinamenti completi ➔</span>
                 </BottoneSartoriale>
               </div>
             )}
@@ -557,85 +602,133 @@ export default function Home() {
         )}
 
         {/* ========================================================= */}
-        {/* TAB 3: SEMAFORO                                           */}
+        {/* TAB 3: IL SEMAFORO CON LA ROULETTE VIOLA 🎲💜             */}
         {/* ========================================================= */}
         {tab === 'semaforo' && (
           <div className="space-y-5">
-            <div className="bg-white border border-[#E8DFC8] p-5 rounded-3xl shadow-sm space-y-4">
-              <h3 className="font-serif font-bold text-lg text-[#2B1B17]">
-                Il Semaforo Sartoriale 🚦
-              </h3>
-              <p className="text-xs text-[#7A695C]">
-                Scegli i colori che vuoi mettere oggi:
-              </p>
+            
+            {/* TASTO ROULETTE DI PAPÀ IN PRIMO PIANO */}
+            <div className="bg-gradient-to-r from-[#FAF5FF] via-white to-[#FAF5FF] p-4 rounded-3xl border-2 border-purple-200 shadow-sm flex flex-col sm:flex-row items-center justify-between gap-3">
+              <div>
+                <h4 className="font-serif font-black text-sm text-purple-900 flex items-center gap-1.5">
+                  <Dices className="w-4 h-4 text-purple-600" />
+                  <span>Non hai voglia di pensare all'outfit?</span>
+                </h4>
+                <p className="text-xs text-purple-700">Fai girare la Roulette e lascia fare all'app!</p>
+              </div>
 
-              {/* Scelta Sopra */}
+              <BottoneSartoriale
+                onClick={giraRoulette}
+                variante="viola"
+                className="w-full sm:w-auto shrink-0"
+              >
+                <Dices className={`w-4 h-4 ${inGiroRoulette ? 'animate-spin' : ''}`} />
+                <span>{inGiroRoulette ? 'Scelta in corso...' : 'Gira la Roulette! 🎲'}</span>
+              </BottoneSartoriale>
+            </div>
+
+            {/* SELETTORI MANUALI */}
+            <div className="bg-white border border-[#E8DFC8] p-5 rounded-3xl shadow-sm space-y-4">
+              <h3 className="font-serif font-bold text-base text-[#2B1B17]">
+                Oppure componi tu l'outfit:
+              </h3>
+
+              {/* Sopra */}
               <div>
                 <label className="text-xs font-bold text-[#7A695C] block mb-2 uppercase">1. Colore Sopra:</label>
                 <div className="flex flex-wrap gap-2">
                   {['Blu Scuro / Navy', 'Bianco Ottico', 'Nero Notte', 'Grigio Perla', 'Celeste Camicia', 'Bordeaux / Vinaccia'].map(c => (
                     <button
                       key={c}
-                      onClick={() => setSemSopra(c)}
+                      onClick={() => { setSemSopra(c); setDaRoulette(false); }}
                       className={`px-3 py-1.5 rounded-xl border text-xs font-bold transition ${
                         semSopra === c ? 'bg-[#3E2723] text-white border-[#2A1810]' : 'bg-[#FAF8F5] border-[#E8DFC8]'
                       }`}
                     >
-                      <BollinoColore nome={c} mostraNome={true} />
+                      <BollinoColore nome={c} />
                     </button>
                   ))}
                 </div>
               </div>
 
-              {/* Scelta Pantaloni */}
+              {/* Pantaloni */}
               <div>
                 <label className="text-xs font-bold text-[#7A695C] block mb-2 uppercase">2. Colore Pantaloni:</label>
                 <div className="flex flex-wrap gap-2">
                   {['Beige Sabbia', 'Jeans Denim Chiaro', 'Nero Notte', 'Blu Scuro / Navy', 'Verde Oliva / Cargo'].map(c => (
                     <button
                       key={c}
-                      onClick={() => setSemSotto(c)}
+                      onClick={() => { setSemSotto(c); setDaRoulette(false); }}
                       className={`px-3 py-1.5 rounded-xl border text-xs font-bold transition ${
                         semSotto === c ? 'bg-[#3E2723] text-white border-[#2A1810]' : 'bg-[#FAF8F5] border-[#E8DFC8]'
                       }`}
                     >
-                      <BollinoColore nome={c} mostraNome={true} />
+                      <BollinoColore nome={c} />
                     </button>
                   ))}
                 </div>
               </div>
 
-              {/* Scelta Scarpe */}
+              {/* Scarpe */}
               <div>
                 <label className="text-xs font-bold text-[#7A695C] block mb-2 uppercase">3. Colore Scarpe:</label>
                 <div className="flex flex-wrap gap-2">
                   {['Marrone Cuoio', 'Bianco Ottico', 'Nero Notte'].map(c => (
                     <button
                       key={c}
-                      onClick={() => setSemScarpe(c)}
+                      onClick={() => { setSemScarpe(c); setDaRoulette(false); }}
                       className={`px-3 py-1.5 rounded-xl border text-xs font-bold transition ${
                         semScarpe === c ? 'bg-[#3E2723] text-white border-[#2A1810]' : 'bg-[#FAF8F5] border-[#E8DFC8]'
                       }`}
                     >
-                      <BollinoColore nome={c} mostraNome={true} />
+                      <BollinoColore nome={c} />
                     </button>
                   ))}
                 </div>
               </div>
             </div>
 
-            {/* VERDETTO */}
-            <div className={`p-6 rounded-3xl border-2 shadow-sm ${verdetto.colore === 'verde' ? 'bg-[#F1F8E9] border-[#689F38]' : 'bg-[#FFEBEE] border-[#D32F2F] animate-pulse'}`}>
-              <div className="flex items-start gap-3">
-                {verdetto.colore === 'verde' ? <CheckCircle2 className="w-8 h-8 text-[#2E7D32] shrink-0" /> : <XCircle className="w-8 h-8 text-[#C62828] shrink-0" />}
-                <div>
-                  <h4 className={`text-base font-serif font-black ${verdetto.colore === 'verde' ? 'text-[#2E7D32]' : 'text-[#C62828]'}`}>
-                    {verdetto.titolo}
-                  </h4>
-                  <p className="text-xs sm:text-sm text-[#3E2723] mt-1 font-medium">{verdetto.testo}</p>
+            {/* BOX VERDETTO: SE VIENE DALLA ROULETTE DIVENTA VIOLA CON LA TUA FRASE! */}
+            {daRoulette ? (
+              <div className="p-6 rounded-3xl border-2 border-purple-400 bg-gradient-to-br from-[#FAF5FF] via-[#F3E8FF] to-[#EDE9FE] shadow-lg animate-fadeIn text-purple-950">
+                <div className="flex items-start gap-3.5">
+                  <span className="text-3xl">🎲</span>
+                  <div className="flex-1">
+                    <span className="text-[11px] font-black uppercase tracking-wider bg-purple-200 text-purple-900 px-2.5 py-0.5 rounded-full">
+                      Scelto dalla Roulette
+                    </span>
+                    <h4 className="text-lg font-serif font-black text-purple-900 mt-1">
+                      (Non ti andava eh... faccio io questa volta 😉)
+                    </h4>
+                    <p className="text-xs sm:text-sm text-purple-800 mt-1.5 font-medium leading-relaxed">
+                      Tranquillo papà, ti ho scelto una combinazione garantita al 100%: <b>{semSopra}</b> sopra, <b>{semSotto}</b> sotto e <b>{semScarpe}</b> ai piedi. Vai sereno che fai figurone!
+                    </p>
+
+                    <div className="mt-4 pt-3 border-t border-purple-300/60 flex justify-end">
+                      <BottoneSartoriale
+                        onClick={() => salvaCompleto(semSopra, semSotto, semScarpe, 'Scelto dalla Roulette')}
+                        variante="viola"
+                      >
+                        <Save className="w-3.5 h-3.5" />
+                        <span>Salva questo completo fortunato</span>
+                      </BottoneSartoriale>
+                    </div>
+                  </div>
                 </div>
               </div>
-            </div>
+            ) : (
+              <div className={`p-6 rounded-3xl border-2 shadow-sm ${verdetto.colore === 'verde' ? 'bg-[#F1F8E9] border-[#689F38]' : 'bg-[#FFEBEE] border-[#D32F2F] animate-pulse'}`}>
+                <div className="flex items-start gap-3">
+                  {verdetto.colore === 'verde' ? <CheckCircle2 className="w-8 h-8 text-[#2E7D32] shrink-0" /> : <XCircle className="w-8 h-8 text-[#C62828] shrink-0" />}
+                  <div>
+                    <h4 className={`text-base font-serif font-black ${verdetto.colore === 'verde' ? 'text-[#2E7D32]' : 'text-[#C62828]'}`}>
+                      {verdetto.titolo}
+                    </h4>
+                    <p className="text-xs sm:text-sm text-[#3E2723] mt-1 font-medium">{verdetto.testo}</p>
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
         )}
 
@@ -649,6 +742,7 @@ export default function Home() {
             {completi.length === 0 ? (
               <div className="text-center py-12 bg-white border border-[#E8DFC8] rounded-3xl p-6">
                 <p className="text-[#5D4037] font-bold">Nessun completo ancora salvato nell'armadio.</p>
+                <p className="text-xs text-[#8D6E63] mt-1">Salva un completo dalla Palette o dalla Roulette!</p>
               </div>
             ) : (
               <div className="grid gap-3">
@@ -667,11 +761,17 @@ export default function Home() {
                           <span>👞 Scarpe:</span> <BollinoColore nome={c.shoes_piece} misura="piccolo" />
                         </div>
                       </div>
+                      {c.notes && (
+                        <span className="inline-block mt-2 text-[10px] bg-[#F5ECE0] text-[#78350F] px-2.5 py-0.5 rounded-full font-bold">
+                          {c.notes}
+                        </span>
+                      )}
                     </div>
 
                     <button
                       onClick={() => eliminaCompleto(c.id)}
                       className="p-2.5 text-stone-400 hover:text-rose-500 rounded-full hover:bg-rose-50 transition"
+                      title="Elimina"
                     >
                       <Trash2 className="w-5 h-5" />
                     </button>
